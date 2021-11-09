@@ -50,6 +50,37 @@ QString Cache::OpenByCache()
         return "";
     }
 }
+
+void Cache::DeleteUserImg()
+{
+
+    const char* home_dir = std::getenv(USER_HOME_DIR);
+    std::string FilePath = std::string(home_dir)+"\\UserImg.png";
+
+    if (home_dir == nullptr)
+    {
+        LOG_ERROR("The environment variable \"" + std::string(USER_HOME_DIR) + "\" not set");
+        throw std::runtime_error("The environment variable \"" + std::string(USER_HOME_DIR) + "\" not set");
+    }
+
+    if (FileExists(GetCachePath())==false)
+    {
+
+        return;
+    }
+    else
+    {
+        if(remove(FilePath.c_str()) != 0)
+        {
+            LOG_ERROR("Error deleting file");
+        }
+        else
+        {
+             LOG_DEBUG("File deleted");
+        }
+    }
+}
+
 void Cache::ReadUserImg()
 {
     const char* home_dir = std::getenv(USER_HOME_DIR);
@@ -61,8 +92,14 @@ void Cache::ReadUserImg()
     }
     std::string ImgPath = std::string(home_dir) + "\\UserImg.png";
     QPixmap PixMapImg;
-    PixMapImg.load(QString::fromStdString(ImgPath));
-    CurrentUser::getInstance()->setImage(PixMapImg);
+    if(FileExists(ImgPath)){
+        PixMapImg.load(QString::fromStdString(ImgPath));
+        CurrentUser::getInstance()->setImage(PixMapImg);
+    }
+    else
+    {
+        WriteUserImg();
+    }
 }
 
 void Cache::WriteUserImg()
@@ -117,7 +154,7 @@ bool Cache::FileExists(const std::string &filename)
 
 void Cache::DeleteCacheFile()
 {
-    char* FilePath = new char[GetCachePath().length()+1];
+    char* FilePath = new char[GetCachePath().length()+16];
     std::strcpy(FilePath,GetCachePath().c_str());
 
     if (FileExists(GetCachePath())==false)

@@ -25,6 +25,7 @@ public:
     static void DeleteCacheFile();
     static void WriteUserImg();
     static void ReadUserImg();
+    static void DeleteUserImg();
 
 private:
     static bool FileExists(const std::string& filename);
