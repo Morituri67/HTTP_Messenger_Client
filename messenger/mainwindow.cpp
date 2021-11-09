@@ -8,6 +8,7 @@
 #include "chatinfo.h"
 #include <QMessageBox>
 #include <QScrollBar>
+bool checkEqualityOfChats(const std::map<unsigned long,std::pair<QPixmap,QString>>&,const std::map<unsigned long,std::pair<QPixmap,QString>>&);
 
 MainWindow::MainWindow(QMainWindow* parent)
     : QMainWindow(parent)
@@ -46,7 +47,7 @@ void MainWindow::on_ChatList_itemClicked(QListWidgetItem *item)
         ++iterator;
     }
     unsigned long chatId = iterator->first;
-    currentChat.resetChat(chatId, item->text());
+    currentChat.resetChat(chatId, item->text(), iterator->second.first);
     ui->ChatInfo->setText(item->text());
     ui->Messages->clear();
     ui->EnterMessage->clear();
@@ -130,17 +131,22 @@ void MainWindow::onRequestFinished(QNetworkReply *reply, RequestType type)
     {
         if(type==RequestType::GET_CHATS)
         {
-            std::map<unsigned long, QString> chats = extractor.extractChats(document);
-            if(CurrentUser::getInstance()->getChats() != chats)
+            auto chatsInfo = extractor.extractChats(document);
+            bool isEqual = checkEqualityOfChats(CurrentUser::getInstance()->getChats(),chatsInfo);
+            if(!isEqual)
             {
-                CurrentUser::getInstance()->setChats(chats);
+                chatList.clear();
+                ui->ChatList->clear();
+                CurrentUser::getInstance()->setChats(chatsInfo);
                 showChats();
                 if(currentChat.getId() != 0)
                 {
-                    ui->ChatInfo->setText(chats[currentChat.getId()]);
-                    currentChat.setName(chats[currentChat.getId()]);
+                    ui->ChatInfo->setText(chatsInfo[currentChat.getId()].second);
+                    currentChat.setName(chatsInfo[currentChat.getId()].second);
+                    currentChat.setImage(chatsInfo[currentChat.getId()].first);
                 }
             }
+
         }
         else if(type==RequestType::GET_MESSAGES)
         {
@@ -153,14 +159,15 @@ void MainWindow::onRequestFinished(QNetworkReply *reply, RequestType type)
             {
                 if(msg.getWriter() == CurrentUser::getInstance()->getLogin())
                 {
-                    showMessage("Me:", msg.getMessage(), msg.getDate(), msg.getTime().split('.')[0]);
+                    saveMessage("Me:", msg.getMessage(), msg.getDate(), msg.getTime().split('.')[0]);
                 }
                 else
                 {
-                    showMessage(msg.getWriter() + ':', msg.getMessage(), msg.getDate(), msg.getTime().split('.')[0]);
+                    saveMessage(msg.getWriter() + ':', msg.getMessage(), msg.getDate(), msg.getTime().split('.')[0]);
                 }
                 currentChat.setLastMessage(msg);
             }
+            showMessages();
             if (ScrollBar->value() == ScrollBar->maximum())
             {
                 ui->Messages->scrollToBottom();
@@ -174,7 +181,6 @@ void MainWindow::onRequestFinished(QNetworkReply *reply, RequestType type)
         else if(type == RequestType::LOG_OUT)
         {
             Cache::DeleteCacheFile();
-            this->close();
             emit SignoutButtonClicked();
         }
         else if(type == RequestType::CHECK_TOKEN)
@@ -182,6 +188,23 @@ void MainWindow::onRequestFinished(QNetworkReply *reply, RequestType type)
             emit start();
         }
     }
+}
+
+bool checkEqualityOfChats(const std::map<unsigned long,std::pair<QPixmap,QString>>& chat1,const std::map<unsigned long,std::pair<QPixmap,QString>>& chat2)
+{
+    if(chat1.size() != chat2.size())
+    {
+        return false;
+    }
+    for(auto &it: chat1)
+    {
+        if(it.second.first.toImage() != chat2.at(it.first).first.toImage() ||
+           it.second.second != chat2.at(it.first).second)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool MainWindow::CheckMessage()
@@ -221,15 +244,22 @@ void MainWindow::on_UserImg_clicked()
     emit openProfileWindow();
 }
 
-void MainWindow::showMessage(QString from, QString message, QString date, QString time)
+void MainWindow::showMessages()
+{
+    for(int i = ui->Messages->count(); i < conversation.size(); i++)
+    {
+        ui->Messages->addItem(&conversation[i]);
+    }
+}
+
+void MainWindow::saveMessage(QString from, QString message, QString date, QString time)
 {
     if(currentChat.getLastMessage().getDate() != date)
     {
         QListWidgetItem itemDate(date);
         itemDate.setTextAlignment(Qt::AlignmentFlag::AlignCenter);
         itemDate.setForeground(Qt::gray);
-         conversation.push_back(itemDate);
-        ui->Messages->addItem(&conversation.back());
+        conversation.push_back(itemDate);
     }
     QListWidgetItem itemFrom(from);
     QListWidgetItem itemMessage(setMessageProperties(message));
@@ -247,12 +277,9 @@ void MainWindow::showMessage(QString from, QString message, QString date, QStrin
         itemFrom.setForeground(Qt::blue);
     }
     conversation.push_back(itemFrom);
-    ui->Messages->addItem(&conversation.back());
     conversation.push_back(itemMessage);
-    ui->Messages->addItem(&conversation.back());
     conversation.push_back(itemTime);
-    ui->Messages->addItem(&conversation.back());
-    ui->Messages->addItem("");
+    conversation.push_back(QListWidgetItem(""));
 }
 
 QString MainWindow::setMessageProperties(QString message)
@@ -312,11 +339,16 @@ void MainWindow::leaveChat()
 
 void MainWindow::showChats()
 {
-    ui->ChatList->clear();
-    std::map<unsigned long, QString> chats = CurrentUser::getInstance()->getChats();
+    auto chats = CurrentUser::getInstance()->getChats();
     for(auto &a: chats)
     {
-        ui->ChatList->addItem(a.second);
+        QListWidgetItem chat(a.second.second);
+        chat.setIcon(a.second.first);
+        chatList.push_back(chat);
+    }
+    for(auto &a: chatList)
+    {
+        ui->ChatList->addItem(&a);
     }
 }
 
@@ -350,6 +382,7 @@ void MainWindow::closeEvent(QCloseEvent * e)
 {
     conversation.clear();
     CurrentUser::getInstance()->clearChats();
+    CurrentUser::getInstance()->setImage(QPixmap());
     emit finished();
 }
 

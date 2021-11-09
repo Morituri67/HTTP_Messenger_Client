@@ -51,6 +51,7 @@ QString Cache::OpenByCache()
     }
 }
 
+
 void Cache::DeleteUserImg()
 {
 
@@ -80,6 +81,7 @@ void Cache::DeleteUserImg()
         }
     }
 }
+
 
 void Cache::ReadUserImg()
 {
